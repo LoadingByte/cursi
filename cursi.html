@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CURSI</title>
+
+    <style>
+        body {
+            margin: 0;
+            background-color: #222;
+            font-family: sans-serif;
+        }
+
+        h1,
+        footer {
+            font-family: monospace;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0.75em;
+            color: #eee;
+            font-size: 3.5em;
+            font-weight: normal;
+        }
+
+        footer {
+            margin: 1em;
+            color: white;
+            font-weight: bold;
+        }
+
+        footer a {
+            color: white;
+        }
+
+        footer a:hover {
+            color: #bbb;
+        }
+
+        main {
+            max-width: 70em;
+            margin: auto;
+            padding: 1em;
+            background-color: white;
+
+            display: grid;
+            grid-gap: 1em;
+            grid-template-columns: min-content auto 10em;
+            grid-template-areas:
+                "readme            readme      readme"
+                "input-label       input       ."
+                "output-label      output      ."
+                "error-label       error       callctr-label"
+                ".                 keyboard    callctr"
+                "interactive-label interactive stack-label"
+                "script-label      script      stack";
+        }
+
+        #readme {
+            padding: 0 1em 1em 1em
+        }
+
+        dl {
+            padding: 0 1em;
+            display: grid;
+            grid-template-columns: max-content auto;
+            grid-gap: 0.5em 2em;
+            align-items: center;
+        }
+
+        dt {
+            grid-column-start: 1;
+            font-family: monospace;
+            font-size: 2em;
+        }
+
+        dd {
+            grid-column-start: 2;
+            margin: 0;
+        }
+
+        #input-label,
+        #output-label,
+        #error-label,
+        #interactive-label {
+            justify-self: end;
+            align-self: center;
+        }
+
+        #script-label {
+            justify-self: end;
+            margin-top: 0.5em;
+        }
+
+        #callctr-label,
+        #stack-label {
+            align-self: end;
+            margin-bottom: -0.5em;
+        }
+
+        #keyboard {
+            display: flex;
+            flex-wrap: wrap;
+            margin: -2px;
+        }
+
+        #keyboard>button {
+            width: 2em;
+            height: 2em;
+            margin: 2px;
+            border: 1px solid gray;
+            font-family: monospace;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+
+        #input,
+        #output,
+        #error,
+        #interactive,
+        #script,
+        #callctr-wrapper,
+        #stack-wrapper {
+            border: 1px solid;
+            font-family: monospace;
+            font-size: 1.5em;
+        }
+
+        #input,
+        #output,
+        #error,
+        #interactive,
+        #script,
+        #callctr-wrapper {
+            padding: 0.3em;
+        }
+
+        #input,
+        #interactive,
+        #script {
+            border-color: gray;
+        }
+
+        #output,
+        #callctr-wrapper,
+        #stack-wrapper {
+            border-color: black;
+        }
+
+        #error {
+            border-color: #a33;
+        }
+
+        #error-label,
+        #error {
+            color: #a33;
+        }
+
+        #output,
+        #error,
+        #stack-wrapper {
+            /* Show scrollbar if necessary */
+            overflow: auto;
+        }
+
+        #output,
+        #error {
+            max-height: 4em;
+        }
+
+        #script {
+            min-height: 10em;
+            /* Textarea has a margin by default, remove it */
+            margin: 0;
+            /* Textarea cannot be resized since that is done via JavaScript */
+            resize: none;
+        }
+
+        #callctr-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #stack-wrapper {
+            position: relative;
+        }
+
+        #stack {
+            padding: 0.8em 0;
+            text-align: center;
+            /* Absolute positioning is necessary for the stack to hide behind a scrollbar if it exceeds the grid's height */
+            position: absolute;
+            top: 0;
+            /* Make this div as wide as the surrounding wrapper div */
+            left: 0;
+            right: 0;
+        }
+
+        /* For phones */
+        @media (max-width:480px) {
+            main {
+                grid-template-columns: 3fr 1fr;
+                grid-template-areas:
+                    "readme            readme"
+                    "input-label       callctr-label"
+                    "input             callctr"
+                    "output-label      stack-label"
+                    "output            stack"
+                    "error-label       stack"
+                    "error             stack"
+                    "keyboard          stack"
+                    "interactive-label interactive-label"
+                    "interactive       interactive"
+                    "script-label      script-label"
+                    "script            script";
+            }
+
+            /* Since all labels are on top now... */
+            #input-label,
+            #output-label,
+            #error-label,
+            #interactive-label,
+            #script-label {
+                justify-self: start;
+                align-self: end;
+                margin-bottom: -0.5em;
+            }
+
+            #script-label {
+                margin-top: 0;
+            }
+        }
+    </style>
+
+    <script>
+        "use strict";
+
+        window.onload = function () {
+            run()
+            resizeScriptTextarea()
+
+            document.getElementById("input").oninput = run
+            document.getElementById("interactive").oninput = run
+            document.getElementById("script").oninput = function () {
+                resizeScriptTextarea()
+                run()
+            }
+
+            for (const btn of document.getElementById("keyboard").children) {
+                btn.onmousedown = function (e) { e.preventDefault() }
+                btn.onclick = function () { insertChar(btn.textContent) }
+            }
+        }
+
+        function resizeScriptTextarea() {
+            const scrollY = window.scrollY
+
+            const textarea = document.getElementById("script")
+            textarea.style.height = ""
+            textarea.style.height = textarea.scrollHeight + "px"
+
+            window.scrollTo(0, scrollY)
+        }
+
+        function insertChar(char) {
+            const field = document.activeElement
+
+            if (field.id === "input" || field.id === "interactive" || field.id === "script") {
+                const start = field.selectionStart
+                const end = field.selectionEnd
+
+                // Insert char
+                field.value =
+                    field.value.substring(0, start) +
+                    char +
+                    field.value.substring(end, field.value.length)
+
+                // Reposition cursor
+                field.selectionStart = field.selectionEnd = start + char.length
+
+                // Fire input event
+                const e = document.createEvent("UIEvent")
+                e.initEvent("input", true, false)
+                field.dispatchEvent(e)
+            }
+        }
+
+        function run() {
+            document.getElementById("stack").textContent = ""
+            // Imitate the sizes that these divs would have if they had content
+            document.getElementById("output").innerHTML = "&nbsp;"
+            document.getElementById("error").innerHTML = "&nbsp;<br/>&nbsp;"
+
+            try {
+                // Parse the script into functions
+                const script = document.getElementById("script").value
+                const funcs = parseScriptToFuncs(script)
+
+                // Overwrite the script's main function with the interactive one if present
+                let interactiveFunc = document.getElementById("interactive").value
+                interactiveFunc = interactiveFunc.replace(/ /g, "")  // remove spaces
+                if (interactiveFunc) {
+                    funcs["m"] = interactiveFunc
+                }
+
+                // Put the user input on the stack
+                const dataStack = parseInputToDataStack(funcs, document.getElementById("input").value)
+
+                // Execute the script
+                const finalState = execScript(funcs, dataStack)
+
+                // Output the state at the end of the program
+                showState(finalState)
+            } catch (e) {
+                let msg
+                if (e instanceof CursiException) {
+                    showState(e.state)
+                    msg = e.message + "<br/>In: " + e.state.callStack.join("&#8203;→")
+                } else {
+                    msg = e + "<br/>&nbsp;"
+                }
+                document.getElementById("error").innerHTML = msg
+            }
+        }
+
+        function showState(state) {
+            if (state.output)
+                document.getElementById("output").textContent = state.output
+
+            document.getElementById("callctr").textContent = state.callCounter
+            // Can't just use <br/> to join stack elements because of a strange bug in Firefox when the viewport is small
+            document.getElementById("stack").innerHTML = "<div>" + state.dataStack.join("</div><div>") + "</div>"
+        }
+
+        function parseScriptToFuncs(script) {
+            let funcs = {}
+
+            for (let line of script.split("\n")) {
+                line = line.replace(/ /g, "")  // remove spaces
+                if (line) {
+                    const funcName = line[0]
+                    if (funcName in funcs)
+                        throw "Function '" + funcName + "' declared twice."
+                    funcs[funcName] = line.slice(1)
+                }
+            }
+
+            return funcs
+        }
+
+        function parseInputToDataStack(funcs, input) {
+            const dataStack = []
+
+            for (let elem of input.split(" ")) {
+                elem = elem.replace(/ /g, "")  // remove spaces
+
+                if (elem) {
+                    const n = parseInt(elem)
+                    if (!isNaN(n))
+                        dataStack.push(n)
+                    else if (elem.length !== 1)
+                        throw "Function names are single characters, unlike '" + elem + "' in user input."
+                    else
+                        dataStack.push(elem)
+                }
+            }
+
+            return dataStack
+        }
+
+        function State(funcs, dataStack) {
+            this.funcs = funcs
+            this.callCounter = 0
+            this.callStack = []
+            this.dataStack = dataStack
+            this.output = ""
+        }
+
+        function CursiException(state, message) {
+            this.state = state
+            this.message = message
+        }
+
+        function execScript(funcs, dataStack) {
+            if (!("m" in funcs))
+                throw "Main function 'm' not found."
+
+            const state = new State(funcs, dataStack)
+            execFunc(state, "m")
+            return state
+        }
+
+        function execFunc(state, funcName) {
+            if (!(funcName in state.funcs))
+                throw new CursiException(state, "Called function '" + funcName + "' does not exist.")
+
+            state.callStack.push(funcName)
+
+            if (state.callCounter > 10_000_000)
+                throw new CursiException(state, "Maximum call count of 10,000,000 exceeded.")
+            if (state.callStack.length > 10_000)
+                throw new CursiException(state, "Maximum recursion depth of 10,000 exceeded.")
+
+            const func = state.funcs[funcName]
+            let pushMode = false
+            for (const char of func) {
+                switch (char) {
+                    case "(":  // enable push mode
+                        if (pushMode)
+                            throw new CursiException(state, "Already in function push mode. Cannot enter twice.")
+                        pushMode = true
+                        break
+                    case ")":  // disable push mode
+                        if (!pushMode)
+                            throw new CursiException(state, "Not in function push mode. Cannot exit.")
+                        pushMode = false
+                        break
+                    default:
+                        state.callCounter++
+
+                        if (pushMode)
+                            state.dataStack.push(char)
+                        else {
+                            let cont = execChar(state, char)
+                            if (!cont) {
+                                state.callStack.pop()
+                                return
+                            }
+                        }
+                }
+            }
+
+            state.callStack.pop()
+        }
+
+        function execChar(state, char) {
+            switch (char) {
+                case "#":  // push zero
+                    state.dataStack.push(0)
+                    break
+                case "△":  // increment
+                    state.dataStack.push(pop(state, "int") + 1)
+                    break
+                case "▽":  // decrement
+                    state.dataStack.push(pop(state, "int") - 1)
+                    break
+                case "↥":  // duplicate
+                    var value = pop(state, null)
+                    state.dataStack.push(value)
+                    state.dataStack.push(value)
+                    break
+                case "⇟":  // pop
+                    pop(state, null)
+                    break
+                case "⇭":  // fetch
+                    var n = pop(state, "int")
+                    if (n === 0)
+                        state.dataStack.push(n)
+                    else {
+                        if (n < 0 || n > state.dataStack.length)
+                            throw new CursiException(state, "Cannot ⇭ from depth " + n + " because that exceeds the current stack size.")
+                        var valueArr = state.dataStack.splice(state.dataStack.length - n, 1)
+                        state.dataStack.push(valueArr[0])
+                    }
+                    break
+                case "p":  // print number
+                    state.output += pop(state, "int")
+                    break
+                case "P":  // print character
+                    state.output += String.fromCharCode(pop(state, "int"))
+                    break
+                case "r":  // conditional return
+                    if (pop(state, "int"))
+                        return false  // do not continue function
+                    break
+                case "x":  // execute function from data stack
+                    execFunc(state, pop(state, "func"))
+                    break
+                default:
+                    execFunc(state, char)
+            }
+
+            return true  // continue function
+        }
+
+        function pop(state, expectedType) {
+            const value = state.dataStack.pop()
+
+            if (value === undefined)
+                throw new CursiException(state, "Cannot pop from stack because it is empty.")
+            if (expectedType === "int" && !Number.isInteger(value))
+                throw new CursiException(state, "Expected integer on top of stack, but found function '" + value + "' instead.")
+            if (expectedType === "func" && typeof value !== "string")
+                throw new CursiException(state, "Expected function on top of stack, but found integer " + value + " instead.")
+
+            return value
+        }
+    </script>
+</head>
+
+<body>
+    <h1>CURSI</h1>
+    <main>
+        <div id="readme" style="grid-area: readme;">
+            <p>
+                CURSI is an esoteric programming language based on re<em>cursi</em>on and composition.
+                It comes with a very minimal set of basic functions that are composed to create more meaningful
+                functions.
+            </p>
+            <p>
+                A CURSI script operates on a <em>global stack</em> that can contain <em>signed integers</em> and
+                <em>functions</em>. The stack is initially populated with the space-separated user input.
+                <br />
+                Each line of the script defines a function.
+                The first character of the line is the function's <em>name</em>, the rest is its <em>code string</em>
+                (spaces are completely ignored).
+                Each character in the code string is a <em>reference</em> to another function.
+                When the function is invoked, these references are in turn called sequentially.
+                Note that functions inside <code>()</code> are not called, but instead pushed onto the stack.
+            </p>
+            <p>CURSI comes with the following built-in functions:</p>
+            <dl>
+                <dt>#</dt>
+                <dd>Pushes a 0 onto the stack.</dd>
+                <dt>△</dt>
+                <dd>Increments the number at the top of the stack.</dd>
+                <dt>▽</dt>
+                <dd>Decrements the number at the top of the stack.</dd>
+                <dt>↥</dt>
+                <dd>Duplicates the value at the top of the stack.</dd>
+                <dt>⇟</dt>
+                <dd>Deletes the value at the top of the stack.</dd>
+                <dt>⇭</dt>
+                <dd>Gets and deletes the number n at the top of the stack.
+                    Then looks down the stack n elements and moves the found element to the top of the stack.</dd>
+                <dt>p</dt>
+                <dd>Deletes the number at the top of the stack and outputs it.</dd>
+                <dt>P</dt>
+                <dd>Deletes the number at the top of the stack.
+                    Then converts it to a Unicode character and outputs it.</dd>
+                <dt>r</dt>
+                <dd>Gets and deletes the number at the top of the stack.
+                    If it is not 0, the current function returns.</dd>
+                <dt>x</dt>
+                <dd>Deletes and executes the function at the top of the stack.</dd>
+            </dl>
+            <p>
+                Any CURSI script must have a main with the name <code>m</code>.
+                When the script is executed, that main function is invoked first.
+                Note that typing in the "interactive" prompt overrides the main function with the code string
+                from the prompt.
+            </p>
+        </div>
+
+        <div id="input-label" style="grid-area: input-label;">Input:</div>
+        <div id="output-label" style="grid-area: output-label;">Output:</div>
+        <div id="error-label" style="grid-area: error-label;">Error:</div>
+        <div id="interactive-label" style="grid-area: interactive-label;">Interactive:</div>
+        <div id="script-label" style="grid-area: script-label;">Script:</div>
+        <div id="callctr-label" style="grid-area: callctr-label;">Calls:</div>
+        <div id="stack-label" style="grid-area: stack-label;">Final stack:</div>
+
+        <input id="input" style="grid-area: input;" value="0 33 68 76 82 79 87 32 44 79 76 76 69 72" autocomplete="off"
+            autocorrect="off" autocapitalize="off" spellcheck="false"></input>
+        <div id="output" style="grid-area: output;"></div>
+        <div id="error" style="grid-area: error;"></div>
+        <div id="keyboard" style="grid-area: keyboard;">
+            <button>△</button>
+            <button>▽</button>
+            <button>±</button>
+            <button>↥</button>
+            <button>⇟</button>
+            <button>⇭</button>
+            <button>⇅</button>
+            <button>α</button>
+            <button>β</button>
+            <button>γ</button>
+            <button>δ</button>
+            <button>ε</button>
+            <button>ζ</button>
+            <button>η</button>
+            <button>θ</button>
+            <button>ι</button>
+            <button>κ</button>
+            <button>λ</button>
+            <button>μ</button>
+            <button>ν</button>
+            <button>ξ</button>
+            <button>ο</button>
+            <button>π</button>
+            <button>ρ</button>
+            <button>σ</button>
+            <button>τ</button>
+            <button>υ</button>
+            <button>φ</button>
+            <button>χ</button>
+            <button>ψ</button>
+            <button>ω</button>
+        </div>
+        <input id="interactive" style="grid-area: interactive;" autocomplete="off" autocorrect="off"
+            autocapitalize="off" spellcheck="false"></input>
+        <textarea id="script" style="grid-area: script;" autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false">
+m #32#58#84#85#80#78#73 PPPPPPP α
+α ↥!rPα
+
+
+~
+⇅ #△△⇭
+! #⇅r△
+
+§ #△△△⇭ω⇟x
+ω r⇅
+
+? (~)§
+
+± ↥!r ↥ψ ⇅⇟⇅⇟
+ψ △⇅▽⇅ ↥!#▽⇅r⇟ ⇅ ↥!#△⇅r⇟ ⇅ ψ
+
++ ↥±△(χφ)§⇟
+χ ↥!r ▽⇅△⇅ χ
+φ ↥!r △⇅▽⇅ φ
+
+- ↥↥+ ↥±△(υτ)§⇟
+υ ↥!r ▽⇅▽⇅ υ
+τ ↥!r △⇅△⇅ τ
+
+* ↥±△!(σ)?⇅ #ρ ⇟⇅⇟
+σ -⇅-⇅
+ρ #△△△⇭ ↥!r▽ #△△△⇭↥#△△△△⇭+ ρ
+
+0 #△△△△△△△△△△ *
+1 0 #△ +
+2 0 #△△ +
+3 0 #△△△ +
+4 0 #△△△△ +
+5 0 #△△△△△ +
+6 0 #△△△△△△ +
+7 0 #△△△△△△△ +
+8 0 #△△△△△△△△ +
+9 0 #△△△△△△△△△ +</textarea>
+        <div id="callctr-wrapper" style="grid-area: callctr;">
+            <div id="callctr"></div>
+        </div>
+        <div id="stack-wrapper" style="grid-area: stack;">
+            <div id="stack"></div>
+        </div>
+    </main>
+    <footer>
+        CURSI is made with &hearts; by <a href="https://github.com/LoadingByte" target="_blank">LoadingByte</a>.<br />
+        Code is available on <a href="https://github.com/LoadingByte/cursi" target="_blank">GitHub</a>.
+    </footer>
+</body>
+
+</html>
