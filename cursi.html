@@ -400,9 +400,9 @@
 
             state.callStack.push(funcName)
 
-            if (state.callCounter > 10_000_000)
+            if (state.callCounter > 10000000)
                 throw new CursiException(state, "Maximum call count of 10,000,000 exceeded.")
-            if (state.callStack.length > 10_000)
+            if (state.callStack.length > 10000)
                 throw new CursiException(state, "Maximum recursion depth of 10,000 exceeded.")
 
             const func = state.funcs[funcName]
