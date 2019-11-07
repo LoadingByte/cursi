@@ -290,6 +290,7 @@
         }
 
         function run() {
+            document.getElementById("callctr").textContent = ""
             document.getElementById("stack").textContent = ""
             // Imitate the sizes that these divs would have if they had content
             document.getElementById("output").innerHTML = "&nbsp;"
@@ -321,7 +322,7 @@
                     showState(e.state)
                     msg = e.message + "<br/>In: " + e.state.callStack.join("&#8203;→")
                 } else {
-                    msg = e + "<br/>&nbsp;"
+                    msg = e
                 }
                 document.getElementById("error").innerHTML = msg
             }
@@ -359,11 +360,11 @@
                 elem = elem.replace(/ /g, "")  // remove spaces
 
                 if (elem) {
-                    const n = parseInt(elem)
-                    if (!isNaN(n))
-                        dataStack.push(n)
+                    if (/^[+-]?[0-9]+$/.test(elem)) {
+                        dataStack.push(parseInt(elem, 10))
+                    }
                     else if (elem.length !== 1)
-                        throw "Function names are single characters, unlike '" + elem + "' in user input."
+                        throw "Each input element must be either an integer or a function name (single character); '" + elem + "' is neither."
                     else
                         dataStack.push(elem)
                 }
